@@ -14,7 +14,6 @@ cyclestudies/
 ├── scripts/             
 │   └── dc_api/          # Discord API 抓取脚本
 │       ├── main.go
-│       ├── type.go
 │       ├── config.json           # ❌ 不提交
 │       ├── config.local.json     # ❌ 不提交
 │       ├── config.example.json
