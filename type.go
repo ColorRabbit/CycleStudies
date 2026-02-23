@@ -113,3 +113,11 @@ func (u *Uint64Like) UnmarshalJSON(b []byte) error {
 	}
 	return fmt.Errorf("invalid uint64 like: %s", string(b))
 }
+
+type PostConfig struct {
+	MonthStr string `json:"month_str"`
+	Title    string `json:"title"`
+	SubTitle string `json:"sub_title"`
+	FileName string `json:"file_name"`
+	PostID   string `json:"post_id"`
+}

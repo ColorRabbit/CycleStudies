@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -277,7 +278,8 @@ func initService() {
 	}
 	// 加载数据
 	count := 0
-	for _, cfg := range ChannelList {
+	dynamicPostListMu.RLock()
+	for _, cfg := range dynamicPostList {
 		path := "data/" + cfg.FileName
 		bytes, err := embeddedFiles.ReadFile(path)
 		if err != nil {
@@ -290,6 +292,7 @@ func initService() {
 			count++
 		}
 	}
+	dynamicPostListMu.RUnlock()
 	fmt.Printf("📦 已加载 %d 个数据文件\n", count)
 }
 
@@ -319,66 +322,141 @@ func verifyToken(token string) (*UserSession, error) {
 }
 
 // 抓取消息逻辑
-func fetchNewMessages(token, chanID, startID string) ([]DiscordMessage, error) {
+func fetchNewMessages(token, chanID, sinceID string) ([]DiscordMessage, error) {
 	client := getClient()
-	result := make(map[string]DiscordMessage)
+	messageMap := make(map[string]DiscordMessage) // 用于去重
 
-	// 1. 先抓取起点附近，确保连接
-	fetchBatch(client, token, chanID, "limit=50&around="+startID, result)
-
-	// 2. 向后抓取
-	cursor := startID
-	for {
-		tmp := make(map[string]DiscordMessage)
-		err := fetchBatch(client, token, chanID, "limit=100&after="+cursor, tmp)
-		if err != nil || len(tmp) == 0 {
-			break
+	// 辅助函数：在一个消息批次中找到最小和最大的 ID
+	findMinMaxID := func(msgs []DiscordMessage) (string, string) {
+		if len(msgs) == 0 {
+			return "", ""
 		}
-
-		maxID := cursor
-		for _, m := range tmp {
-			result[m.ID] = m
-			if m.ID > maxID {
-				maxID = m.ID
+		minID := msgs[0].ID
+		maxID := msgs[0].ID
+		for _, msg := range msgs {
+			if msg.ID < minID { // Discord snowflake ID 是时间有序的
+				minID = msg.ID
+			}
+			if msg.ID > maxID {
+				maxID = msg.ID
 			}
 		}
+		return minID, maxID
+	}
 
-		if maxID == cursor {
-			break
+	if sinceID == "" {
+		// 情况1: 抓取所有消息 (从最新的开始，逐步向过去抓取)
+		// 首先抓取第一批最新消息
+		query := "limit=100"
+		initialBatch, err := fetchBatch(client, token, chanID, query)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch initial batch of messages: %w", err)
 		}
-		cursor = maxID
-		time.Sleep(200 * time.Millisecond)
+		if len(initialBatch) == 0 {
+			return []DiscordMessage{}, nil // 频道中没有消息
+		}
+
+		for _, msg := range initialBatch {
+			messageMap[msg.ID] = msg
+		}
+
+		// 循环向过去抓取 (使用 'before' 参数)
+		currentOldestID, _ := findMinMaxID(initialBatch)
+		for {
+			query = "limit=100&before=" + currentOldestID
+			batch, err := fetchBatch(client, token, chanID, query)
+			if err != nil {
+				log.Printf("Error fetching messages before %s: %v. Continuing with collected messages.", currentOldestID, err)
+				break // 遇到错误，停止并返回已收集的消息
+			}
+			if len(batch) == 0 {
+				break // 没有更旧的消息了
+			}
+
+			newOldestID, _ := findMinMaxID(batch)
+			for _, msg := range batch {
+				messageMap[msg.ID] = msg
+			}
+
+			// 如果最旧的消息ID没有变化，说明已经到达频道的起点
+			if newOldestID == currentOldestID {
+				break
+			}
+			currentOldestID = newOldestID
+			time.Sleep(200 * time.Millisecond) // 尊重 Discord API 速率限制
+		}
+
+	} else {
+		// 情况2: 抓取比 sinceID 更新的消息 (增量更新)
+		// 从 sinceID 之后开始抓取 (使用 'after' 参数)
+		currentNewestID := sinceID
+		for {
+			query := "limit=100&after=" + currentNewestID
+			batch, err := fetchBatch(client, token, chanID, query)
+			if err != nil {
+				log.Printf("Error fetching messages after %s: %v. Continuing with collected messages.", currentNewestID, err)
+				break // 遇到错误，停止并返回已收集的消息
+			}
+			if len(batch) == 0 {
+				break // 没有更新的消息了
+			}
+
+			_, newestIDinBatch := findMinMaxID(batch)
+			for _, msg := range batch {
+				messageMap[msg.ID] = msg
+			}
+
+			// 如果最新消息ID没有变化，说明已经抓取到最新的消息
+			if newestIDinBatch == currentNewestID {
+				break
+			}
+			currentNewestID = newestIDinBatch
+			time.Sleep(200 * time.Millisecond) // 尊重 Discord API 速率限制
+		}
 	}
 
-	var list []DiscordMessage
-	for _, m := range result {
-		list = append(list, m)
+	// 将 map 中的消息转换为切片
+	var result []DiscordMessage
+	for _, msg := range messageMap {
+		result = append(result, msg)
 	}
-	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
-	return list, nil
+
+	// 按 ID 升序排序 (从旧到新)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ID < result[j].ID
+	})
+
+	return result, nil
 }
 
-func fetchBatch(client *http.Client, token, chanID, query string, out map[string]DiscordMessage) error {
+// fetchBatch 执行单个 Discord API 请求来获取消息批次。
+func fetchBatch(client *http.Client, token, chanID, query string) ([]DiscordMessage, error) {
 	discordUrl := fmt.Sprintf("https://discord.com/api/v9/channels/%s/messages?%s", chanID, query)
-	req, _ := http.NewRequest("GET", discordUrl, nil)
+	req, err := http.NewRequest("GET", discordUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for %s: %w", discordUrl, err)
+	}
+
+	// 假设传入的 token 已经包含了 "Bot " 前缀（如果它是一个 Bot Token）
 	req.Header.Set("Authorization", token)
+	req.Header.Set("User-Agent", "DiscordArchiveViewer (CustomApp, 1.0)") // 建议设置 User-Agent
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to execute request to %s: %w", discordUrl, err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("status %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body) // 读取响应体以获取更多错误信息
+		return nil, fmt.Errorf("received non-200 status code %d from %s: %s", resp.StatusCode, discordUrl, string(bodyBytes))
 	}
 
 	var msgs []DiscordMessage
-	json.NewDecoder(resp.Body).Decode(&msgs)
-	for _, m := range msgs {
-		out[m.ID] = m
+	if err := json.NewDecoder(resp.Body).Decode(&msgs); err != nil {
+		return nil, fmt.Errorf("failed to decode messages from %s: %w", discordUrl, err)
 	}
-	return nil
+	return msgs, nil
 }
 
 // HTTP Client 工厂

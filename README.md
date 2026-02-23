@@ -10,6 +10,7 @@ cyclestudies/
 ├── init.go                 # 初始化逻辑
 ├── cache.go                # 缓存管理
 ├── config.go               # 配置处理
+├── post_config.json        # 默认读取的左侧列表配置
 ├── type.go                 # 数据结构定义
 ├── go.mod                  # Go 模块依赖
 ├── img.png                 # Token 获取教程截图
