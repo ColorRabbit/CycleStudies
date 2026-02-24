@@ -2,6 +2,34 @@
 
 一个用 Go 编写的 Discord 频道消息查看和抓取工具。
 
+## 使用教程
+
+### Windows 使用与打包
+* 下载 [新手答疑.exe](https://github.com/ColorRabbit/CycleStudies/releases/download/v0.1.0/EricChatViewer.exe)
+* 在 EXE 的**同级目录**下创建 `proxy.txt` 文件：
+
+```bash
+# Windows: 右键创建新文本文档，重命名为 proxy.txt
+# 或在 PowerShell 中运行：
+echo "http://127.0.0.1:7890" > proxy.txt
+```
+
+或者用任何文本编辑器（如 Notepad、VS Code）创建，内容为：
+
+```
+http://127.0.0.1:7890
+```
+
+> **说明：** `7890` 是常见 VPN/代理软件（如 Clash、v2rayN 等）的默认代理端口。  
+> 如果你使用其他代理工具，请根据该工具的设置更改端口号。
+
+### macOS 使用与打包
+* 下载 [EricChatViewer.dmg](https://github.com/ColorRabbit/CycleStudies/releases/download/v0.1.0/EricChatViewer.dmg)
+* 双击打开 DMG，拖拽 [新手答疑](macOS/%E6%96%B0%E6%89%8B%E7%AD%94%E7%96%91) 到任意文件夹
+* 第一次打开时若遇到 Gatekeeper，选择“仍要打开”并信任来源
+* 若需要代理，确保在同级目录放置 proxy.txt，内容为代理地址，例如：http://127.0.0.1:7890
+
+
 ## 📁 项目结构
 
 ```
@@ -199,33 +227,6 @@ if diff >= 0 && diff <= 5*time.Minute {  // 🔥 修改这里
     shouldMerge = true
 }
 ```
-
-## 如果你已经下载了编译好的 EXE 文件，使用方式如下：
-### 配置代理（在大陆的表哥一定要配置）
-
-* 下载 [新手答疑.exe](https://github.com/ColorRabbit/CycleStudies/releases/download/v0.1.0/EricChatViewer.exe)
-在 EXE 的**同级目录**下创建 `proxy.txt` 文件：
-
-```bash
-# Windows: 右键创建新文本文档，重命名为 proxy.txt
-# 或在 PowerShell 中运行：
-echo "http://127.0.0.1:7890" > proxy.txt
-```
-
-或者用任何文本编辑器（如 Notepad、VS Code）创建，内容为：
-
-```
-http://127.0.0.1:7890
-```
-
-> **说明：** `7890` 是常见 VPN/代理软件（如 Clash、v2rayN 等）的默认代理端口。  
-> 如果你使用其他代理工具，请根据该工具的设置更改端口号。
-
-## macOS 使用与打包
-* 下载 [EricChatViewer.dmg](https://github.com/ColorRabbit/CycleStudies/releases/download/v0.1.0/EricChatViewer.dmg)
-* 双击打开 DMG，拖拽 [新手答疑](macOS/%E6%96%B0%E6%89%8B%E7%AD%94%E7%96%91) 到任意文件夹
-* 第一次打开时若遇到 Gatekeeper，选择“仍要打开”并信任来源
-* 若需要代理，确保在同级目录放置 proxy.txt，内容为代理地址，例如：http://127.0.0.1:7890
 
 ## 📝 常见问题
 
