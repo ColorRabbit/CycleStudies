@@ -27,32 +27,64 @@ func buildViewNodes(raw []DiscordMessage, myID string) []*ViewNode {
 
 		isMe := (m.Author.ID == myID)
 
+		replyToID := ""
+		if m.MsgRef != nil {
+			replyToID = m.MsgRef.MessageID
+		}
+
 		node := &ViewNode{
-			ID:         m.ID,
-			AuthorName: m.Author.Username,
-			Avatar:     getAvatar(m.Author.ID, m.Author.Avatar),
-			Time:       t.Format("2006-01-02 15:04"),
-			RawTime:    t,
-			Content:    m.Content,
-			Images:     imgs,
-			IsReply:    false,
-			IsMention:  false,
-			IsMe:       isMe,
+			ID:          m.ID,
+			AuthorName:  m.Author.Username,
+			Avatar:      getAvatar(m.Author.ID, m.Author.Avatar),
+			Time:        t.Format("2006-01-02 15:04"),
+			RawTime:     t,
+			Content:     m.Content,
+			Images:      imgs,
+			ReplyTarget: "",
+			ReplyToID:   replyToID,
+			IsReply:     false,
+			IsMention:   false,
+			IsMe:        isMe,
 		}
 		nodeMap[m.ID] = node
 	}
 
-	// 第二步：构建树状结构 (处理回复关系)
+	// 第二步：构建“根消息 + 扁平回复流”结构
+	findRoot := func(node *ViewNode) *ViewNode {
+		visited := map[string]bool{}
+		curr := node
+
+		for curr != nil && curr.ReplyToID != "" {
+			if visited[curr.ID] {
+				break
+			}
+			visited[curr.ID] = true
+
+			parent, ok := nodeMap[curr.ReplyToID]
+			if !ok {
+				break
+			}
+			curr = parent
+		}
+		return curr
+	}
+
 	for _, m := range raw {
 		curr := nodeMap[m.ID]
+
 		if m.MsgRef != nil {
 			if parent, ok := nodeMap[m.MsgRef.MessageID]; ok {
 				curr.IsReply = true
 				curr.ReplyTarget = parent.AuthorName
-				parent.Replies = append(parent.Replies, curr)
-				continue
+
+				root := findRoot(curr)
+				if root != nil && root.ID != curr.ID {
+					root.Replies = append(root.Replies, curr)
+					continue
+				}
 			}
 		}
+
 		mainAxis = append(mainAxis, curr)
 	}
 
@@ -119,12 +151,12 @@ func buildViewNodes(raw []DiscordMessage, myID string) []*ViewNode {
 	// 第三步：处理主轴消息
 	finalRoot := processNodes(mainAxis)
 
-	// 第四步：处理每一条消息下的回复列表 (关键修复点！)
-	for _, node := range finalRoot {
-		if len(node.Replies) > 0 {
-			node.Replies = processNodes(node.Replies)
-		}
-	}
+	// 删掉对回复列表的 merge，fix来回回复消息bug
+	//for _, node := range finalRoot {
+	//	if len(node.Replies) > 0 {
+	//		node.Replies = processNodes(node.Replies)
+	//	}
+	//}
 
 	return finalRoot
 }

@@ -40,8 +40,8 @@ type ViewNode struct {
 	RawTime                               time.Time
 	Images                                []string
 	Replies                               []*ViewNode
+	ReplyTarget, ReplyToID                string
 	IsReply                               bool
-	ReplyTarget                           string
 	IsMention                             bool
 	IsMe                                  bool // 是否是当前登录用户
 }

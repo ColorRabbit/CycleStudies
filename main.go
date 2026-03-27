@@ -105,7 +105,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			MaxAge:   3600 * 24 * 30, // 30天
 		})
 
-		// --- 用户请求的新增逻辑：在登录时预加载所有频道的历史消息 ---
+		// --- 在登录时预加载所有频道的历史消息 ---
 		fmt.Printf("🔄 用户 [%s] 登录成功，开始从接口获取频道配置...\n", user.Username)
 		configs, fetchConfigErr := fetchPostConfigurations() // 假设接口需要 token
 		if fetchConfigErr != nil {
@@ -133,7 +133,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		//	fmt.Printf("✅ 预加载频道 [%s] 消息成功，共 %d 条.\n", cfg.FileName, len(fetchedMsgs))
 		//}
 		//fmt.Println("✅ 所有频道消息预加载完成。")
-		// --- 新增逻辑结束 ---
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
