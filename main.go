@@ -224,7 +224,7 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var targetPostID string
-	dynamicPostListMu.RLock() // 使用读锁保护
+	dynamicPostListMu.RLock()
 	for _, cfg := range dynamicPostList {
 		if cfg.FileName == targetFile {
 			targetPostID = cfg.PostID
@@ -247,30 +247,57 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 
 	sinceID := ""
 	if hasExistingMsgs && len(existingMsgs) > 0 {
-		// 如果有现有消息，则获取比最新消息 ID 更新的消息
-		// 假设 existingMsgs 是按最新到最旧排序的，那么 existingMsgs[0].ID 就是最新的消息 ID。
 		sinceID = existingMsgs[0].ID
 		fmt.Printf("🔄 用户 [%s] 正在抓取 [%s] 的新消息 (PostID: %s, 从 %s 之后)...\n", currentUser.Username, targetFile, targetPostID, sinceID)
 	} else {
-		// 如果没有现有消息，或者 targetFile 不在 memoryStore 中，则从头开始抓取所有消息。
 		fmt.Printf("🔄 用户 [%s] 正在抓取 [%s] 的所有消息 (PostID: %s, 从头开始)...\n", currentUser.Username, targetFile, targetPostID)
 	}
 
 	newlyFetchedMsgs, err := fetchNewMessages(currentUser.Token, targetPostID, sinceID)
 
 	if err == nil {
-		storeMu.Lock() // 使用写锁写入 memoryStore
+		storeMu.Lock()
 		if sinceID != "" {
-			// 如果是增量抓取，将新获取的消息添加到现有消息列表的前面
-			// 假设 newlyFetchedMsgs 也是按最新到最旧排序的。
-			memoryStore[targetFile] = append(newlyFetchedMsgs, existingMsgs...)
+			// 1. 用新消息构建 map，用于：① 去重判断 ② 覆盖旧消息的图片 URL
+			newMsgMap := make(map[string]DiscordMessage, len(newlyFetchedMsgs))
+			for _, m := range newlyFetchedMsgs {
+				newMsgMap[m.ID] = m
+			}
+
+			// 2. 遍历旧消息：如果新消息里有同 ID，用新消息的 Attachments 覆盖（刷新过期图片 URL）
+			for i, old := range existingMsgs {
+				if fresh, ok := newMsgMap[old.ID]; ok {
+					existingMsgs[i].Attachments = fresh.Attachments
+				}
+			}
+
+			// 3. 筛选出真正新增的消息（旧列表里没有的 ID）
+			existingIDs := make(map[string]bool, len(existingMsgs))
+			for _, m := range existingMsgs {
+				existingIDs[m.ID] = true
+			}
+			var trulyNew []DiscordMessage
+			for _, m := range newlyFetchedMsgs {
+				if !existingIDs[m.ID] {
+					trulyNew = append(trulyNew, m)
+				}
+			}
+
+			// 4. 将真正新增的消息追加到列表头部
+			if len(trulyNew) > 0 {
+				memoryStore[targetFile] = append(trulyNew, existingMsgs...)
+				fmt.Printf("✅ 同步 [%s] 成功，新增 %d 条，当前共 %d 条\n", targetFile, len(trulyNew), len(trulyNew)+len(existingMsgs))
+			} else {
+				// 没有新消息，但图片 URL 已刷新，直接写回
+				memoryStore[targetFile] = existingMsgs
+				fmt.Printf("✅ 同步 [%s] 成功，无新消息，已刷新图片 URL\n", targetFile)
+			}
 		} else {
-			// 如果是完整抓取，直接替换现有消息列表
+			// 首次抓取，直接存储
 			memoryStore[targetFile] = newlyFetchedMsgs
+			fmt.Printf("✅ 同步 [%s] 成功，共 %d 条\n", targetFile, len(newlyFetchedMsgs))
 		}
-		currentTotalMsgs := len(memoryStore[targetFile])
-		storeMu.Unlock() // 释放写锁
-		fmt.Printf("✅ 同步 [%s] 成功，当前共 %d 条\n", targetFile, currentTotalMsgs)
+		storeMu.Unlock()
 	} else {
 		fmt.Printf("❌ 同步 [%s] 失败: %v\n", targetFile, err)
 	}

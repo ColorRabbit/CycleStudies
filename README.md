@@ -228,6 +228,20 @@ if diff >= 0 && diff <= 5*time.Minute {  // 🔥 修改这里
 }
 ```
 
+### 打包
+```shell
+# 打包EXE
+GOOS=windows GOARCH=amd64 go build -o EricChatViewer.exe .
+# inter芯片
+GOOS=darwin GOARCH=amd64 go build -o EricChatViewer_amd64 .
+# apple芯片
+GOOS=darwin GOARCH=arm64 go build -o EricChatViewer_arm64 .
+# 合并打包
+lipo -create -output EricChatViewer EricChatViewer_arm64 EricChatViewer_amd64
+# 打包dmg
+hdiutil create EricChatViewer.dmg -volname "EricChatViewer" -srcfolder ./macOS -ov -format UDZO
+```
+
 ## 📝 常见问题
 
 ### Q: 抓取时提示 "API错误: 401"
