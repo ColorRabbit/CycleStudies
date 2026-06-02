@@ -209,7 +209,7 @@ func getUserAccessibleChannels(token, guildID, userID string) (map[string]bool, 
 		if ch.GuildID != guildID {
 			continue
 		}
-		//fmt.Printf("🔐 计算 user %s, channel %s:%s in guild %s\n", userID, ch.ID, ch.Name, guildID)
+		// fmt.Printf("🔐 计算 user %s, channel %s:%s in guild %s\n", userID, ch.ID, ch.Name, guildID)
 		if channelReadableByUser(ch, userRoles, perms, guildID, userID) {
 			accessible[ch.ID] = true
 		}

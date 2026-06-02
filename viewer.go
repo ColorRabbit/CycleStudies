@@ -274,7 +274,7 @@ func renderHome(w http.ResponseWriter, data PageData) {
     .msg-text { font-size: 15px; line-height: 1.7; color: #2e3338; white-space: pre-wrap; margin-bottom: 10px; }
     
     .img-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-    .chat-img { max-width: 200px; max-height: 200px; border-radius: 6px; cursor: zoom-in; border: 1px solid #eee; }
+    .chat-img { max-width: 520px; max-height: 520px; border-radius: 6px; cursor: zoom-in; border: 1px solid #eee; }
     
     .reply-list { background: #F5F7FA; border-radius: 8px; padding: 10px 15px; margin-top: 10px; }
     .reply-item { margin-bottom: 8px; font-size: 13px; line-height: 1.5; color: #555; white-space: normal; }
